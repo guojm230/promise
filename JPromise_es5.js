@@ -1,13 +1,15 @@
 /**
+ * @author 郭佳明
+ * @description
  * 符合Promise A+ 规范的Promise工具 
  * 具体规范见: https://promisesaplus.com
- * 注意：Promise底层使用的微任务，应用层无法实现，用setTimeout模拟
- * Promise主要用于解决回调嵌套，能够把多层回调转化为链式调用，利用Promise对ajax请求进行封装，
+ * 官方的所有测试用例已通过，具体见: https://github.com/promises-aplus/promises-tests
+ * Promise主要用于解决回调嵌套，把多层嵌套的回调转化为链式调用，利用Promise对ajax请求进行封装，
  * 使其返回Promise对象，用法如下：
  * 封装request：
  * fun httpGet(options){
  *    return new JPromise(function(resolve,reject){
- *          doRequest(options,function (res){
+ *          doRequest(options,function (res){   //发起请求
  *              if(res.success){
  *                  resolve(res.data);
  *              } else 
@@ -17,6 +19,7 @@
  * }
  * 
  * 使用:
+ * 1. 回调转为链式调用
  * httpGet(options).then(function(data){
  *      do Something...
  *      return httpGet(options2);    //发起第二个请求
@@ -29,214 +32,220 @@
  *      window.errTip(cause);
  * })
  * 
+ * 2. 整合多个请求,如果有一个失败则调用catch，全部成功则调用successHandler
+ * JPromise.all(httpGet(),httpGet(),httpGet(),...)
+ * .then(res=>{})
+ * .catch(cause=> alert(cause));
+ * 
  */
+(function (define, global) {
+    define(function () {
+        var STATE_REJECTED = -1;
+        var STATE_PENDING = 0;
+        var STATE_FULFILLED = 1;
 
- var STATE_REJECTED = -1;
- var STATE_PENDING = 0;
- var STATE_FULFILLED = 1;
- 
- function JPromise(executor) {
-     this.state = STATE_PENDING;
-     this.value = undefined;
-     this.reason = undefined;
-     //handlers，注意每个handler只允许执行一次
-     this.fulfilledHandlers = [];
-     this.rejectedHandlers = [];
- 
-     var that = this;
- 
-     this.resolve = function (v) {
-         if (that.state === STATE_PENDING) {
-             that.value = v;
-             that.state = STATE_FULFILLED;
-             while (that.fulfilledHandlers.length > 0) {
-                 that.fulfilledHandlers.shift().call(undefined, that.value);
-             }
-         }
-     }
- 
-     this.reject = function (c) {
-         if (that.state === STATE_PENDING) {
-             that.reason = c;
-             that.state = STATE_REJECTED;
-             while (that.rejectedHandlers.length > 0) {
-                 that.rejectedHandlers.shift().call(undefined, that.reason);
-             }
-         }
-     }
- 
-     this.then = function (onFulfilled, onRejected) {
-         var promise2 = new JPromise(function (resolve, reject) {
-             if (typeof (onFulfilled) === "function") {
-                 if (that.state === STATE_PENDING) {
-                     that.fulfilledHandlers.push(function (result) {
-                         //promise a+规范，回调函数this应为undefined，下同
-                         try {
-                             var x = onFulfilled.call(undefined, result);
-                             //根据x的值决定promise2的状态
-                             resolvePromise(promise2, x);
-                         } catch (e) {
-                             reject(e);
-                         }
-                     })
-                 } else if (that.state === STATE_FULFILLED) {
-                     var x = onFulfilled.call(undefined, that.value);
-                     resolvePromise(promise2, x);
-                 }
-             } else {    //非function场景
-                 if (that.state === STATE_FULFILLED) {
-                     resolve(onFulfilled);
-                 }
-             }
- 
-             if (typeof (onRejected) === "function") {
-                 if (that.state === STATE_PENDING) {
-                     that.rejectedHandlers.push(function (reason) {
-                         try {
-                             var x = onRejected.call(undefined, reason);
-                             resolvePromise(promise2, x);
-                         } catch (e) {
-                             reject(e);
-                         }
-                     })
-                 } else if (that.state === STATE_REJECTED) {
-                     var x = onRejected.call(undefined, that.value);
-                     resolvePromise(promise2, x);
-                 }
-             } else {
-                 if (that.state === STATE_REJECTED) {
-                     reject(onRejected);
-                 }
-             }
-         });
-         return promise2;
-     }
- 
-     this.success = function (handler) {
-         this.then(handler, undefined);
-     }
- 
-     this.catch = function (handler) {
-         this.then(undefined, handler);
-     }
- 
-     //开始执行
-     setTimeout(function () {
-         try {
-             executor.call(that, that.resolve, that.reject);
-         } catch (e) {
-             that.reject(e);
-         }
-     }, 0)
- }
- 
- function resolvePromise(promise, x) {
-     if (promise === x) {  //规范定义不允许x和promise相等
-         promise.reject(new TypeError("promise不能和x为同一个对象"));
-         return;
-     }
-     if (x === null || x === undefined) {
-         promise.resolve(x);
-         return;
-     }
- 
-     //thenable对象
-     if (isPromise(x)) {
-         //promise状态和x保持一致
-         if (x.state === STATE_PENDING) {
-             x.then(function (result) {
-                 promise.resolve(result);
-             }, function (reason) {
-                 promise.reject(reason);
-             });
-         }
- 
-         if (x.state === STATE_FULFILLED) {
-             promise.resolve(x.value);
-         }
-         if (x.state === STATE_REJECTED) {
-             promise.reject(x.reason);
-         }
-         return;
-     }
- 
-     var then;
-     try {
-         then = x.then;
-     } catch (e) {
-         promise.reject(e);
-         return;
-     }
- 
-     if (typeof (then) !== "function") {
-         promise.resolve(x);
-         return;
-     }
-     var resolved = false;
-     try {
-         //promise a+ 2.3.3.3 resolvePromise和rejectPromise函数
-         then.call(x, function (y) {
-             if (resolved) {
-                 return;
-             }
-             resolve = true;
-             resolvePromise(promise, y);
-         }, function (r) {
-             if (resolved) {
-                 return;
-             }
-             resolve = true;
-             promise.reject(r);
-         });
-     } catch (e) {
-         if (!resolved) {
-             promise.reject(e);
-         }
-     }
- }
- 
- //测试一个对象是否为promise特性的对象
- function isPromise(p) {
-     if (!p) {
-         return false;
-     }
-     if (typeof (p.then) === "function"
-         && typeof (p.resolve) === "function"
-         && typeof (p.reject) === "function") {
-         return true;
-     }
-     return false;
- }
- 
- JPromise.prototype.all = function (promiseArray) {
-     return new JPromise(function (resolve, reject) {
-         if (!Array.isArray(promiseArray)) {
-             resolve();
-             return;
-         }
-         var count = 0;
-         var failed = false;
-         for (var i = 0; i < promiseArray.length; i++) {
-             var promise = promiseArray[i];
-             if (isPromise(promise)) {
-                 promise.then(function () {
-                     count++;
-                     if (!failed && count === promiseArray.length) {
-                         resolve();
-                     }
-                 }, function (e) {
-                     if (!failed) {
-                         failed = true;
-                         reject(e);
-                     }
-                 });
-             } else {
-                 resolve(promise);
-             }
-         }
-     });
- }
- 
- 
- 
- module.exports = JPromise;
+        var nextTick = function (executor) {
+            setTimeout(executor, 0);
+        }
+
+        //node环境下
+        if (global.process && typeof (global.process.nextTick) === "function") {
+            nextTick = process.nextTick;
+        }
+
+        function resolvePromise(promise, x, doResolve, doReject) {
+            if (promise === x) {  //规范定义不允许x和promise相等
+                doReject(new TypeError("promise不能和x为同一个对象"));
+                return;
+            }
+            if (x === null || x === undefined) {
+                doResolve(x);
+                return;
+            }
+
+            //x is also a promise
+            if (isPromise(x)) {
+                x.then(result => resolvePromise(promise, result, doResolve, doReject), reason => doReject(reason))
+                return;
+            }
+
+            if (typeof (x) !== "object" && typeof (x) !== "function") {
+                doResolve(x);
+                return;
+            }
+
+            let then;
+            try {
+                then = x.then;
+            } catch (e) {
+                doReject(e);
+                return;
+            }
+
+            if (typeof (then) !== "function") {
+                doResolve(x);
+                return;
+            }
+            let resolved = false;
+            try {
+                //promise a+ 2.3.3.3 resolvePromise和rejectPromise函数
+                then.call(x, function (y) {
+                    if (resolved) {
+                        return;
+                    }
+                    resolved = true;
+                    resolvePromise(promise, y, doResolve, doReject);
+                }, function (r) {
+                    if (resolved) {
+                        return;
+                    }
+                    resolved = true;
+                    doReject(r);
+                });
+            } catch (e) {
+                if (!resolved) {
+                    doReject(e);
+                }
+            }
+        }
+
+        function isPromise(p) {
+            if (!p) {
+                return false;
+            }
+            return p instanceof JPromise || p instanceof Promise;
+        }
+
+        function JPromise(executor) {
+            this._state = STATE_PENDING;
+            this._value = undefined;
+            this._reason = undefined;
+            this._fulfilledHandlers = [];
+            this._rejectedHandlers = [];
+
+            var this$ = this;
+
+            if (typeof (executor) !== "function") {
+                throw new TypeError("executor must be a function");
+            }
+
+            function doResolve(value) {
+                if (this$._state === STATE_PENDING) {
+                    this$._value = value;
+                    this$._state = STATE_FULFILLED;
+                    while (this$._fulfilledHandlers.length > 0) {
+                        this$._fulfilledHandlers.shift().call(undefined, this$._value);
+                    }
+                }
+            }
+
+            function doReject(reason) {
+                if (this$._state === STATE_PENDING) {
+                    this$._reason = reason;
+                    this$._state = STATE_REJECTED;
+                    while (this$._rejectedHandlers.length > 0) {
+                        this$._rejectedHandlers.shift().call(undefined, this$._reason);
+                    }
+                }
+            }
+
+            this.then = function (onFulfilled, onRejected) {
+                onFulfilled = typeof (onFulfilled) === "function" ? onFulfilled : function (v) { return v };
+                onRejected = typeof (onRejected) === "function" ? onRejected : function (err) { throw err };
+                return new JPromise(function (resolve, reject) {
+                    if (this$._state === STATE_FULFILLED) {
+                        nextTick(function () {
+                            const x = onFulfilled.call(undefined, this$._value);
+                            resolve(x);
+                        });
+                    }
+
+                    if (this$._state === STATE_REJECTED) {
+                        nextTick(function () {
+                            try {
+                                const r = onRejected.call(undefined, this$._reason);
+                                resolve(r);
+                            } catch (e) {
+                                reject(e);
+                            }
+                        })
+                    }
+
+                    if (this$._state === STATE_PENDING) {
+                        this$._fulfilledHandlers.push(function (v) {
+                            //promise a+规范，回调函数this应为undefined，下同
+                            try {
+                                const x = onFulfilled.call(undefined, v);
+                                //根据x的值决定promise2的状态
+                                resolve(x);
+                            } catch (e) {
+                                reject(e);
+                            }
+                        });
+                        this$._rejectedHandlers.push(function (r) {
+                            try {
+                                const x = onRejected.call(undefined, r);
+                                resolve(x);
+                            } catch (e) {
+                                reject(e);
+                            }
+                        });
+                    }
+                });
+            }
+
+            try {
+                executor.call(undefined, function (value) {
+                    nextTick(function () {
+                        resolvePromise(this$, value, doResolve.bind(this$), doReject.bind(this$));
+                    });
+                }, function (reason) {
+                    nextTick(function () {
+                        doReject.bind(this$)(reason);
+                    });
+                });
+            } catch (e) {
+                doReject(e);
+            }
+        }
+
+        JPromise.resolve = function (v) {
+            return new JPromise(function (resolve, reject) {
+                resolve(v);
+            });
+        }
+
+        JPromise.reject = function (r) {
+            return new JPromise(function (resolve, reject) {
+                reject(r);
+            });
+        }
+
+        JPromise.all = function(promiseArray){
+            return new JPromise(function(resolve,reject){
+                var count = 0;
+                var failure = false;
+                for(var i = 0; i<promiseArray.length; i++){
+                    var promise = promiseArray[i];
+                    promise.then(function(value){
+                        count++;
+                        if(!failure && count === promiseArray.length){
+                            resolve();
+                        }
+                    },function(r){
+                        if(!failure){
+                            failure = true;
+                            reject(r);
+                        }
+                    });
+                }
+            });
+        }
+
+        JPromise.prototype.catch = function(handler){
+            this.then(undefined,handler);
+        }
+
+        return JPromise;
+    })
+})(typeof define === 'function' && define.amd ? define : function (factory) { module.exports = factory(); }, this);

@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "exe": "node ./index.js",
-    "test": "node ./ptest.js"
+    "test": "node ./test/ptest.js"
   },
   "dependencies": {
     "promises-aplus-tests": "^2.1.2"

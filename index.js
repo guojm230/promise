@@ -1,6 +1,6 @@
-const adapter = require("./adapter");
+const adapter = require("./test/adapter");
 const promisesAplusTests = require("promises-aplus-tests");
-const JPromise = require("./JPromise");
+const JPromise = require("./JPromise_es5");
 
 let count = 0;
 
@@ -35,21 +35,10 @@ function xfactory(){
     });
 }
 
-const p = adapter.resolved();
+new JPromise((re,rj)=>{
+    setTimeout(()=>rj(1),50)
+}).then(res=>{})
+.catch(res=> console.log(res));
 
-// p.then(()=>{
-//     return xfactory();
-// }).then(res=>{
-//     console.log(res);
-// })
 
-new JPromise(re=>{
-    setTimeout(()=>{
-        re({
-            then: function(onFuilled){
-                onFuilled(3);
-            }
-        });
-    },100);
-}).then(res=>console.log(res));
 
