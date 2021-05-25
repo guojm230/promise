@@ -1,5 +1,5 @@
 
-const JPromise = require("../JPromise_es5");
+const JPromise = require("../JPromise");
 
 module.exports.resolved = JPromise.resolve;
 module.exports.rejected = JPromise.reject;
