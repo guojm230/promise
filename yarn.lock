@@ -20,11 +20,6 @@ available-typed-arrays@^1.0.2:
   dependencies:
     array.prototype.filter "^1.0.0"
 
-avow@^5.0.1:
-  version "5.0.1"
-  resolved "https://registry.yarnpkg.com/avow/-/avow-5.0.1.tgz#366407aa98daccced218a2effc36130d2ec0abf6"
-  integrity sha512-wt8VFOjZjqCFhSy4qVCp1zSDjNsTAApxH1Ez7JkWgs9egBIOphB3djhc8L33y8wCVAbzdrP+4UCpwRjefsw+tA==
-
 call-bind@^1.0.0, call-bind@^1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/call-bind/-/call-bind-1.0.2.tgz#b1d4e89e688119c3c9a903ad30abb2f6a919be3c"
