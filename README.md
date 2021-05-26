@@ -1,6 +1,6 @@
 ### A custom promise implementation with [Promise A+ Specification](https://github.com/promises-aplus/promises-spec)
 
-This implementation targets with ES5, so you can use it in IE8 or other modern browsers.
+This implementation targets ES5, so you can use it in IE8 or other modern browsers.
 
 JPromise can interoperate with standard Promise,such as:
 ``` javascript
