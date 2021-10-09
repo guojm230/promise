@@ -7,7 +7,6 @@
  */
 (function (define, global) {
     define(function () {
-
         var STATE_REJECTED = -1;
         var STATE_PENDING = 0;
         var STATE_FULFILLED = 1;
@@ -23,7 +22,7 @@
 
         function resolvePromise(promise, x, doResolve, doReject) {
             if (promise === x) { 
-                doReject(new TypeError("promise不能和x为同一个对象"));
+                doReject(new TypeError("promise must not be the same object with x"));
                 return;
             }
             if (x === null || x === undefined) {
@@ -88,6 +87,7 @@
                     _value = value;
                     _state = STATE_FULFILLED;
                     while (_fulfilledHandlers.length > 0) {
+                        //onFulfilled and onRejected must be called as functions(with no this value)
                         _fulfilledHandlers.shift().call(undefined, _value);
                     }
                 }
@@ -98,6 +98,7 @@
                     _reason = reason;
                     _state = STATE_REJECTED;
                     while (_rejectedHandlers.length > 0) {
+                        //onFulfilled and onRejected must be called as functions(with no this value)
                         _rejectedHandlers.shift().call(undefined, _reason);
                     }
                 }
@@ -165,7 +166,7 @@
             this.catch = function(handler){
                 this.then(undefined,handler);
             }
-
+            //call executor
             try {
                 executor.call(undefined, function (value) {
                     nextTick(function () {
@@ -180,6 +181,8 @@
                 doReject(e);
             }
         }
+
+        //some helper functions
 
         JPromise.resolve = function (v) {
             return new JPromise(function (resolve, reject) {
